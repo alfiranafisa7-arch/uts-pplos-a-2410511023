@@ -1,6 +1,6 @@
 const axios = require('axios');
-const jwt = require('jsonwebtoken');
 const pool = require('../models/db');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const generateTokens = (userId, email) => {
@@ -18,15 +18,20 @@ const generateTokens = (userId, email) => {
 };
 
 exports.redirectToGithub = (req, res) => {
-  const url = `https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&scope=user:email`;
-  res.redirect(url);
+  const params = new URLSearchParams({
+    client_id: process.env.GITHUB_CLIENT_ID,
+    redirect_uri: process.env.GITHUB_CALLBACK_URL,
+    scope: 'user:email',
+  });
+  res.redirect(`https://github.com/login/oauth/authorize?${params}`);
 };
 
 exports.handleCallback = async (req, res) => {
-  try {
-    const { code } = req.query;
+  const { code } = req.query;
+  if (!code) return res.status(400).json({ message: 'Code tidak ditemukan' });
 
-    // Tukar code dengan access token GitHub
+  try {
+    // Tukar code dengan access token
     const tokenRes = await axios.post(
       'https://github.com/login/oauth/access_token',
       {
@@ -44,36 +49,40 @@ exports.handleCallback = async (req, res) => {
       headers: { Authorization: `Bearer ${githubToken}` },
     });
 
-    const githubUser = userRes.data;
-    const email = githubUser.email || `${githubUser.login}@github.com`;
+    const emailRes = await axios.get('https://api.github.com/user/emails', {
+      headers: { Authorization: `Bearer ${githubToken}` },
+    });
 
-    // Cek apakah user sudah ada di DB
-    const [existing] = await pool.query(
-      'SELECT * FROM users WHERE oauth_id = ? AND oauth_provider = ?',
-      [String(githubUser.id), 'github']
-    );
+    const primaryEmail = emailRes.data.find(e => e.primary)?.email || userRes.data.email;
+    const { name, avatar_url } = userRes.data;
+
+    // Cek user sudah ada atau belum
+    const [existing] = await pool.query('SELECT * FROM users WHERE email = ?', [primaryEmail]);
 
     let userId;
     if (existing.length > 0) {
       userId = existing[0].id;
+      await pool.query(
+        'UPDATE users SET name = ?, avatar = ?, oauth_provider = ? WHERE id = ?',
+        [name, avatar_url, 'github', userId]
+      );
     } else {
-      // Buat user baru
       const [result] = await pool.query(
-        'INSERT INTO users (name, email, avatar, oauth_provider, oauth_id) VALUES (?, ?, ?, ?, ?)',
-        [githubUser.name || githubUser.login, email, githubUser.avatar_url, 'github', String(githubUser.id)]
+        'INSERT INTO users (name, email, avatar, oauth_provider) VALUES (?, ?, ?, ?)',
+        [name, primaryEmail, avatar_url, 'github']
       );
       userId = result.insertId;
     }
 
-    const { accessToken, refreshToken } = generateTokens(userId, email);
+    const { accessToken, refreshToken } = generateTokens(userId, primaryEmail);
     await pool.query(
       'INSERT INTO refresh_tokens (user_id, token) VALUES (?, ?)',
       [userId, refreshToken]
     );
 
-    res.json({ message: 'Login GitHub berhasil', accessToken, refreshToken });
+    res.json({ message: 'Login GitHub berhasil', accessToken, refreshToken, name, email: primaryEmail, avatar: avatar_url });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'GitHub OAuth gagal' });
+    res.status(500).json({ message: 'GitHub OAuth gagal', error: err.message });
   }
 };
