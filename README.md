@@ -82,3 +82,6 @@ Client → API Gateway (3000)
 ## Arsitektur Sistem
 Sistem terdiri dari 3 microservice independen dan 1 API Gateway.
 Setiap service memiliki database terpisah untuk menjaga loose coupling.
+
+# link video YouTube
+https://youtu.be/qM_MaSqhgEE 
