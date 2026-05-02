@@ -1,3 +1,6 @@
+// Auth Service - JWT + GitHub OAuth
+// Port: 3001
+// Database: auth_db (MySQL)
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
