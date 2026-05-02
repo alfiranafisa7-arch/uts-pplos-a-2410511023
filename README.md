@@ -78,3 +78,7 @@ Client → API Gateway (3000)
 - Product Service: Laravel 12, MySQL
 - Order Service: Node.js, Express, MongoDB
 - API Gateway: Node.js, Express, http-proxy-middleware
+
+## Arsitektur Sistem
+Sistem terdiri dari 3 microservice independen dan 1 API Gateway.
+Setiap service memiliki database terpisah untuk menjaga loose coupling.
