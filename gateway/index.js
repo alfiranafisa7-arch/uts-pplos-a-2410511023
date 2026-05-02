@@ -41,7 +41,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', createProxyMiddleware({
     target: process.env.AUTH_SERVICE_URL,
     changeOrigin: true,
-    pathRewrite: { '^/api/auth': '' },
+    pathRewrite: (path, req) => path.replace('/api/auth', '/auth'),
     proxyTimeout: 5000,
     timeout: 5000,
     on: {
